@@ -8,29 +8,40 @@ interface ServerConfig {
   username: string;
   password: string;
   port: number;
+  isFixed?: boolean;
 }
 
 export default function Home() {
   const [servers, setServers] = useState<ServerConfig[]>([]);
   const [isClient, setIsClient] = useState(false);
+  const [loadingServers, setLoadingServers] = useState(true);
 
-  // Cargar servidores del localStorage al iniciar
   useEffect(() => {
     setIsClient(true);
-    const saved = localStorage.getItem('servers');
-    if (saved) {
-      try {
-        setServers(JSON.parse(saved));
-      } catch (e) {
-        console.error('Error al cargar servidores:', e);
-      }
-    }
+    loadServers();
   }, []);
 
-  // Guardar servidores en localStorage cuando cambian
+  const loadServers = async () => {
+    try {
+      const response = await fetch('/api/get-servers');
+      const data = await response.json();
+      const fixedServers = data.servers.map((s: ServerConfig) => ({ ...s, isFixed: true }));
+      
+      const saved = localStorage.getItem('additionalServers');
+      const additionalServers = saved ? JSON.parse(saved) : [];
+      
+      setServers([...fixedServers, ...additionalServers]);
+    } catch (error) {
+      console.error('Error loading servers:', error);
+    } finally {
+      setLoadingServers(false);
+    }
+  };
+
   useEffect(() => {
     if (isClient) {
-      localStorage.setItem('servers', JSON.stringify(servers));
+      const additionalServers = servers.filter(s => !s.isFixed);
+      localStorage.setItem('additionalServers', JSON.stringify(additionalServers));
     }
   }, [servers, isClient]);
 
@@ -45,7 +56,6 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Estados para IA
   const [showAIChat, setShowAIChat] = useState(false);
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
@@ -54,7 +64,7 @@ export default function Home() {
 
   const addServer = () => {
     if (newServer.name && newServer.host && newServer.username && newServer.password) {
-      setServers([...servers, { ...newServer }]);
+      setServers([...servers, { ...newServer, isFixed: false }]);
       setNewServer({
         name: '',
         host: '',
@@ -66,6 +76,11 @@ export default function Home() {
   };
 
   const removeServer = (index: number) => {
+    const server = servers[index];
+    if (server.isFixed) {
+      alert('⚠️ No puedes eliminar servidores pre-configurados');
+      return;
+    }
     setServers(servers.filter((_, i) => i !== index));
   };
 
@@ -99,7 +114,6 @@ export default function Home() {
     }
   };
 
-  // Función para revisar TODOS los servidores
   const checkAllServers = async () => {
     setAiLoading(true);
     const data = [];
@@ -134,7 +148,6 @@ export default function Home() {
     setShowAIChat(true);
   };
 
-  // Función para consultar a la IA
   const askAI = async () => {
     if (!aiQuestion.trim()) return;
     
@@ -167,7 +180,6 @@ export default function Home() {
     }
   };
 
-  // Función para categorizar los resultados
   const categorizeResults = (data: any) => {
     const categories: any = {
       'Sistema y Hardware': [],
@@ -249,7 +261,6 @@ export default function Home() {
     alert('📋 Resumen copiado al portapapeles');
   };
 
-  // Función para parsear y crear dashboard bonito
   const parseDashboard = (data: any) => {
     if (!data) return null;
 
@@ -262,13 +273,11 @@ export default function Home() {
       seguridad: {}
     };
 
-    // Parsear uptime
     const uptimeMatch = data['uptime']?.match(/up (\d+) days?/);
     if (uptimeMatch) {
       dashboard.sistema.diasEncendido = parseInt(uptimeMatch[1]);
     }
 
-    // Parsear memoria
     const memMatch = data['free -h']?.match(/Mem:\s+(\S+)\s+(\S+)\s+(\S+)/);
     if (memMatch) {
       dashboard.recursos.memoriaTotal = memMatch[1];
@@ -276,7 +285,6 @@ export default function Home() {
       dashboard.recursos.memoriaLibre = memMatch[3];
     }
 
-    // Parsear disco
     const diskMatch = data['df -h']?.match(/\/dev\/sda1\s+(\S+)\s+(\S+)\s+(\S+)\s+(\d+)%/);
     if (diskMatch) {
       dashboard.recursos.discoTotal = diskMatch[1];
@@ -285,19 +293,16 @@ export default function Home() {
       dashboard.recursos.discoPorcentaje = parseInt(diskMatch[4]);
     }
 
-    // Parsear CPU
     const cpuMatch = data['lscpu | head -n 20']?.match(/CPU\(s\):\s+(\d+)/);
     if (cpuMatch) {
       dashboard.recursos.cpuCores = parseInt(cpuMatch[1]);
     }
 
-    // Parsear OS
     const osMatch = data['cat /etc/os-release']?.match(/PRETTY_NAME="([^"]+)"/);
     if (osMatch) {
       dashboard.sistema.os = osMatch[1];
     }
 
-    // Detectar aplicaciones de lsof
     const lsofData = data['lsof -i -P -n | grep LISTEN | head -n 20'];
     if (lsofData) {
       const apps: any = {};
@@ -332,7 +337,6 @@ export default function Home() {
       dashboard.aplicaciones = Object.values(apps);
     }
 
-    // Detectar servicios activos
     const serviciosData = data['systemctl list-units --type=service --state=running | head -n 20'];
     if (serviciosData) {
       const lines = serviciosData.split('\n');
@@ -349,7 +353,6 @@ export default function Home() {
       });
     }
 
-    // Info de usuarios
     const lastData = data['last -n 10'];
     if (lastData) {
       const lines = lastData.split('\n').filter((l: string) => l.trim() && !l.includes('wtmp'));
@@ -362,14 +365,21 @@ export default function Home() {
   const [showDashboard, setShowDashboard] = useState(false);
   const dashboard = results?.data ? parseDashboard(results.data) : null;
 
+  if (loadingServers) {
+    return (
+      <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'system-ui, -apple-system, sans-serif', textAlign: 'center' }}>
+        <h1 style={{ color: '#333', marginTop: '100px' }}>⏳ Cargando servidores...</h1>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '20px', maxWidth: '1400px', margin: '0 auto', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
       <h1 style={{ color: '#333', marginBottom: '10px' }}>🖥️ Monitor de Servidores</h1>
       <p style={{ color: '#666', marginBottom: '30px', fontSize: '14px' }}>
-        💾 Los servidores se guardan automáticamente en tu navegador
+        🔐 Tus servidores principales están pre-configurados de forma segura
       </p>
 
-      {/* Botón para Consultar IA */}
       {servers.length > 0 && (
         <div style={{ marginBottom: '20px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '20px', borderRadius: '10px' }}>
           <h3 style={{ color: 'white', margin: '0 0 10px 0' }}>🤖 Asistente IA con Gemini</h3>
@@ -395,7 +405,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* Chat IA Modal */}
       {showAIChat && (
         <div style={{
           position: 'fixed',
@@ -420,7 +429,7 @@ export default function Home() {
             padding: '30px'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0 }}>🤖 Asistente IA - Gemini Flash 2.0</h2>
+              <h2 style={{ margin: 0 }}>🤖 Asistente IA - Gemini Flash 2.5</h2>
               <button
                 onClick={() => setShowAIChat(false)}
                 style={{
@@ -494,7 +503,7 @@ export default function Home() {
       )}
 
       <div style={{ marginBottom: '40px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
-        <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>➕ Agregar Servidor</h2>
+        <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>➕ Agregar Servidor Adicional</h2>
         
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '10px', marginBottom: '15px' }}>
           <input
@@ -567,24 +576,38 @@ export default function Home() {
       <div style={{ marginBottom: '40px' }}>
         <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>📋 Mis Servidores ({servers.length})</h2>
         {servers.length === 0 ? (
-          <p style={{ color: '#666' }}>No hay servidores configurados. Agrega uno arriba.</p>
+          <p style={{ color: '#666' }}>No hay servidores configurados.</p>
         ) : (
           <div style={{ display: 'grid', gap: '15px' }}>
             {servers.map((server, index) => (
               <div
                 key={index}
                 style={{
-                  background: 'white',
+                  background: server.isFixed ? '#e8f5e9' : 'white',
                   padding: '15px',
                   borderRadius: '8px',
-                  border: '1px solid #ddd',
+                  border: server.isFixed ? '2px solid #4caf50' : '1px solid #ddd',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                 }}
               >
                 <div>
-                  <strong style={{ fontSize: '16px' }}>{server.name}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <strong style={{ fontSize: '16px' }}>{server.name}</strong>
+                    {server.isFixed && (
+                      <span style={{ 
+                        background: '#4caf50', 
+                        color: 'white', 
+                        padding: '2px 8px', 
+                        borderRadius: '4px', 
+                        fontSize: '12px',
+                        fontWeight: 'bold'
+                      }}>
+                        🔐 Pre-configurado
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: '14px', color: '#666' }}>
                     {server.username}@{server.host}:{server.port}
                   </div>
@@ -606,13 +629,14 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => removeServer(index)}
+                    disabled={server.isFixed}
                     style={{
                       padding: '8px 16px',
-                      background: '#dc3545',
+                      background: server.isFixed ? '#ccc' : '#dc3545',
                       color: 'white',
                       border: 'none',
                       borderRadius: '4px',
-                      cursor: 'pointer',
+                      cursor: server.isFixed ? 'not-allowed' : 'pointer',
                     }}
                   >
                     🗑️ Eliminar
@@ -686,9 +710,7 @@ export default function Home() {
               </div>
 
               {showDashboard && dashboard ? (
-                /* DASHBOARD VISUAL BONITO */
                 <div>
-                  {/* Información del Sistema */}
                   <div style={{ marginBottom: '30px' }}>
                     <h3 style={{ fontSize: '20px', marginBottom: '15px', color: '#4caf50' }}>
                       💻 Información del Servidor
@@ -715,14 +737,12 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Recursos */}
                   {dashboard.recursos && (
                     <div style={{ marginBottom: '30px' }}>
                       <h3 style={{ fontSize: '20px', marginBottom: '15px', color: '#ff9800' }}>
                         📊 Uso de Recursos
                       </h3>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '15px' }}>
-                        {/* Memoria */}
                         {dashboard.recursos.memoriaTotal && (
                           <div style={{ background: 'white', padding: '20px', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
                             <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px', color: '#333' }}>💾 Memoria RAM</div>
@@ -741,7 +761,6 @@ export default function Home() {
                           </div>
                         )}
 
-                        {/* Disco */}
                         {dashboard.recursos.discoTotal && (
                           <div style={{ background: 'white', padding: '20px', borderRadius: '10px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
                             <div style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '10px', color: '#333' }}>💿 Disco Duro</div>
@@ -757,7 +776,6 @@ export default function Home() {
                               <span style={{ fontSize: '14px', color: '#666' }}>Total: </span>
                               <span style={{ fontSize: '16px', fontWeight: 'bold' }}>{dashboard.recursos.discoTotal}</span>
                             </div>
-                            {/* Barra de progreso */}
                             <div style={{ background: '#e0e0e0', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
                               <div style={{ 
                                 background: dashboard.recursos.discoPorcentaje > 80 ? '#f44336' : dashboard.recursos.discoPorcentaje > 60 ? '#ff9800' : '#4caf50',
@@ -774,7 +792,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Aplicaciones */}
                   {dashboard.aplicaciones && dashboard.aplicaciones.length > 0 && (
                     <div style={{ marginBottom: '30px' }}>
                       <h3 style={{ fontSize: '20px', marginBottom: '15px', color: '#9c27b0' }}>
@@ -806,7 +823,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Servicios */}
                   {dashboard.servicios && dashboard.servicios.length > 0 && (
                     <div style={{ marginBottom: '30px' }}>
                       <h3 style={{ fontSize: '20px', marginBottom: '15px', color: '#00bcd4' }}>
@@ -830,7 +846,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Seguridad */}
                   {dashboard.seguridad && (
                     <div style={{ marginBottom: '30px' }}>
                       <h3 style={{ fontSize: '20px', marginBottom: '15px', color: '#f44336' }}>
@@ -848,7 +863,6 @@ export default function Home() {
                   )}
                 </div>
               ) : (
-                /* VISTA TÉCNICA DETALLADA */
                 results.data && (() => {
                   const categories = categorizeResults(results.data);
                   return Object.entries(categories).map(([category, items]: [string, any]) => {
