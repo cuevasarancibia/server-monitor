@@ -1,0 +1,226 @@
+═══════════════════════════════════════════════════════════════
+   COMANDOS EJECUTADOS Y QUÉ INFORMACIÓN PROPORCIONAN
+═══════════════════════════════════════════════════════════════
+
+La aplicación ejecuta los siguientes comandos en tu servidor para 
+obtener información completa:
+
+┌─────────────────────────────────────────────────────────────┐
+│ SISTEMA Y HARDWARE                                           │
+└─────────────────────────────────────────────────────────────┘
+
+1. uname -a
+   └─ Información del kernel y sistema operativo
+   └─ Versión, arquitectura, nombre del host
+
+2. cat /etc/os-release
+   └─ Versión detallada del sistema operativo
+   └─ Nombre de la distribución Linux
+
+3. lscpu | head -n 20
+   └─ Información detallada del CPU
+   └─ Número de cores, arquitectura, frecuencia
+   └─ Modelo del procesador
+
+┌─────────────────────────────────────────────────────────────┐
+│ ESTADO DEL SISTEMA                                           │
+└─────────────────────────────────────────────────────────────┘
+
+4. uptime
+   └─ Tiempo que el servidor lleva encendido
+   └─ Carga promedio del sistema (1, 5, 15 minutos)
+   └─ Usuarios conectados
+
+┌─────────────────────────────────────────────────────────────┐
+│ MEMORIA Y DISCO                                              │
+└─────────────────────────────────────────────────────────────┘
+
+5. free -h
+   └─ Uso de memoria RAM
+   └─ Total, usado, libre, disponible
+   └─ Swap (memoria virtual)
+
+6. df -h
+   └─ Uso de disco en todas las particiones
+   └─ Espacio total, usado, disponible
+   └─ Porcentaje de uso por partición
+
+┌─────────────────────────────────────────────────────────────┐
+│ PROCESOS Y RENDIMIENTO                                       │
+└─────────────────────────────────────────────────────────────┘
+
+7. top -bn1 | head -n 20
+   └─ Procesos activos en tiempo real
+   └─ Uso de CPU y memoria por proceso
+   └─ Resumen general del sistema
+
+8. ps aux --sort=-%mem | head -n 10
+   └─ Top 10 procesos que más memoria consumen
+   └─ Ordenados de mayor a menor uso de RAM
+
+9. ps aux --sort=-%cpu | head -n 10
+   └─ Top 10 procesos que más CPU consumen
+   └─ Ordenados de mayor a menor uso de CPU
+
+┌─────────────────────────────────────────────────────────────┐
+│ RED Y PUERTOS (LO MÁS IMPORTANTE PARA TI)                   │
+└─────────────────────────────────────────────────────────────┘
+
+10. netstat -tuln | head -n 30
+    └─ PUERTOS ABIERTOS EN EL SERVIDOR
+    └─ Protocolo (TCP/UDP)
+    └─ Dirección local y puerto
+    └─ Estado de la conexión (LISTEN = escuchando)
+    
+    Ejemplo de salida:
+    tcp    0.0.0.0:22     LISTEN  ← Puerto SSH abierto
+    tcp    0.0.0.0:80     LISTEN  ← Puerto HTTP abierto
+    tcp    0.0.0.0:443    LISTEN  ← Puerto HTTPS abierto
+
+11. ss -tunap | head -n 30
+    └─ CONEXIONES ACTIVAS DETALLADAS
+    └─ Muestra qué proceso está usando cada puerto
+    └─ PID del proceso y nombre de la aplicación
+    └─ Estado de conexiones (establecidas, escuchando)
+    
+    Ejemplo de salida:
+    LISTEN   0.0.0.0:22   users:(("sshd",pid=1234))
+    ESTAB    192.168.1.10:443  192.168.1.20:52341
+
+12. lsof -i -P -n | grep LISTEN | head -n 20
+    └─ QUÉ APLICACIÓN ESTÁ USANDO CADA PUERTO
+    └─ Nombre del proceso y PID
+    └─ Usuario que ejecuta el proceso
+    └─ Puerto específico en escucha
+    
+    Ejemplo de salida:
+    nginx    1234  www-data  TCP *:80 (LISTEN)
+    nginx    1234  www-data  TCP *:443 (LISTEN)
+    postgres 5678  postgres  TCP 127.0.0.1:5432 (LISTEN)
+
+13. ip addr show
+    └─ Interfaces de red del servidor
+    └─ Direcciones IP asignadas
+    └─ Estado de cada interfaz (UP/DOWN)
+    └─ MAC addresses
+
+┌─────────────────────────────────────────────────────────────┐
+│ SERVICIOS DEL SISTEMA                                        │
+└─────────────────────────────────────────────────────────────┘
+
+14. systemctl list-units --type=service --state=running | head -n 20
+    └─ SERVICIOS ACTUALMENTE CORRIENDO
+    └─ Estado de cada servicio
+    └─ Si están activos o fallaron
+    
+    Ejemplo de salida:
+    nginx.service      loaded active running
+    mysql.service      loaded active running
+    docker.service     loaded active running
+
+┌─────────────────────────────────────────────────────────────┐
+│ DOCKER (SI ESTÁ INSTALADO)                                   │
+└─────────────────────────────────────────────────────────────┘
+
+15. docker ps
+    └─ CONTENEDORES DOCKER CORRIENDO
+    └─ ID del contenedor, imagen, estado
+    └─ Puertos mapeados
+    └─ Nombre del contenedor
+
+16. docker stats --no-stream
+    └─ USO DE RECURSOS DE CONTENEDORES
+    └─ CPU%, memoria, red, disco
+    └─ Recursos por contenedor
+
+┌─────────────────────────────────────────────────────────────┐
+│ USUARIOS Y SEGURIDAD                                         │
+└─────────────────────────────────────────────────────────────┘
+
+17. who
+    └─ USUARIOS ACTUALMENTE CONECTADOS
+    └─ Desde dónde se conectaron (IP)
+    └─ Cuándo se conectaron
+
+18. last -n 10
+    └─ ÚLTIMOS 10 LOGINS AL SISTEMA
+    └─ Historial de conexiones
+    └─ Detectar accesos sospechosos
+
+
+═══════════════════════════════════════════════════════════════
+   EJEMPLO DE INFORMACIÓN DE PUERTOS QUE VERÁS
+═══════════════════════════════════════════════════════════════
+
+Con estos comandos podrás saber:
+
+✓ Qué puertos están ABIERTOS en tu servidor
+✓ Qué APLICACIÓN está usando cada puerto
+✓ Qué CONEXIONES están activas en este momento
+✓ Desde qué IPs se están conectando a tu servidor
+✓ Qué procesos están consumiendo más recursos
+✓ Si hay usuarios conectados y desde dónde
+
+EJEMPLO PRÁCTICO:
+
+Si ves esto en netstat:
+  tcp  0.0.0.0:3306  LISTEN
+
+Significa:
+  → Puerto 3306 está ABIERTO
+  → Está en modo LISTEN (escuchando conexiones)
+  → Probablemente es MySQL/MariaDB
+
+Luego en lsof puedes ver:
+  mysqld  5432  mysql  TCP *:3306 (LISTEN)
+
+Confirma:
+  → El proceso "mysqld" está usando el puerto 3306
+  → Ejecutado por el usuario "mysql"
+  → PID del proceso: 5432
+
+
+═══════════════════════════════════════════════════════════════
+   CÓMO AGREGAR MÁS COMANDOS
+═══════════════════════════════════════════════════════════════
+
+Si quieres ver información adicional, edita:
+  app/api/check-server/route.ts
+
+Y agrega comandos al array 'commands':
+
+  // Ver logs del sistema
+  'tail -n 50 /var/log/syslog',
+  
+  // Ver usuarios del sistema
+  'cat /etc/passwd | grep /bin/bash',
+  
+  // Ver procesos de un servicio específico
+  'systemctl status nginx',
+  
+  // Ver uso de red en tiempo real
+  'iftop -t -s 5',
+  
+  // Ver conexiones específicas a un puerto
+  'netstat -an | grep :80',
+  
+  // Ver certificados SSL
+  'openssl s_client -connect localhost:443 </dev/null 2>/dev/null | openssl x509 -noout -dates',
+
+
+═══════════════════════════════════════════════════════════════
+   NOTAS IMPORTANTES
+═══════════════════════════════════════════════════════════════
+
+⚠️ Algunos comandos pueden requerir permisos root/sudo
+   Asegúrate de que tu usuario SSH tenga los permisos necesarios
+
+⚠️ Si un comando falla, verás "Error: ..." en los resultados
+   Esto es normal si el comando no existe o no tienes permisos
+
+⚠️ Los comandos se ejecutan secuencialmente
+   La revisión completa puede tomar 10-30 segundos
+
+💡 CONSEJO: 
+   Crea un usuario SSH específico para monitoreo con permisos
+   limitados de solo lectura. No uses tu usuario admin principal.
