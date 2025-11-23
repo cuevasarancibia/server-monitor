@@ -45,6 +45,13 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // Estados para IA
+  const [showAIChat, setShowAIChat] = useState(false);
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiAnswer, setAiAnswer] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [allServersData, setAllServersData] = useState<any[]>([]);
+
   const addServer = () => {
     if (newServer.name && newServer.host && newServer.username && newServer.password) {
       setServers([...servers, { ...newServer }]);
@@ -89,6 +96,74 @@ export default function Home() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Función para revisar TODOS los servidores
+  const checkAllServers = async () => {
+    setAiLoading(true);
+    const data = [];
+    
+    for (const server of servers) {
+      try {
+        const response = await fetch('/api/check-server', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            host: server.host,
+            username: server.username,
+            password: server.password,
+            port: server.port,
+          }),
+        });
+        const serverData = await response.json();
+        data.push({
+          name: server.name,
+          host: server.host,
+          data: serverData
+        });
+      } catch (error) {
+        console.error(`Error checking ${server.name}:`, error);
+      }
+    }
+    
+    setAllServersData(data);
+    setAiLoading(false);
+    setShowAIChat(true);
+  };
+
+  // Función para consultar a la IA
+  const askAI = async () => {
+    if (!aiQuestion.trim()) return;
+    
+    setAiLoading(true);
+    setAiAnswer('');
+
+    try {
+      const response = await fetch('/api/ai-assistant', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          question: aiQuestion,
+          serversData: allServersData
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.answer) {
+        setAiAnswer(data.answer);
+      } else {
+        setAiAnswer('Error: ' + (data.error || 'No se pudo obtener respuesta'));
+      }
+    } catch (error) {
+      setAiAnswer('Error al conectar con la IA');
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -174,7 +249,7 @@ export default function Home() {
     alert('📋 Resumen copiado al portapapeles');
   };
 
-  // Función para parsear datos y crear dashboard bonito
+  // Función para parsear y crear dashboard bonito
   const parseDashboard = (data: any) => {
     if (!data) return null;
 
@@ -293,6 +368,130 @@ export default function Home() {
       <p style={{ color: '#666', marginBottom: '30px', fontSize: '14px' }}>
         💾 Los servidores se guardan automáticamente en tu navegador
       </p>
+
+      {/* Botón para Consultar IA */}
+      {servers.length > 0 && (
+        <div style={{ marginBottom: '20px', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '20px', borderRadius: '10px' }}>
+          <h3 style={{ color: 'white', margin: '0 0 10px 0' }}>🤖 Asistente IA con Gemini</h3>
+          <p style={{ color: 'white', fontSize: '14px', marginBottom: '15px' }}>
+            Pregúntale a la IA sobre tus servidores: ¿dónde instalar una app?, ¿cuál tiene más recursos?, etc.
+          </p>
+          <button
+            onClick={checkAllServers}
+            disabled={aiLoading}
+            style={{
+              padding: '12px 24px',
+              background: aiLoading ? '#ccc' : 'white',
+              color: '#667eea',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: aiLoading ? 'not-allowed' : 'pointer',
+              fontWeight: 'bold',
+              fontSize: '16px'
+            }}
+          >
+            {aiLoading ? '⏳ Analizando servidores...' : '🤖 Consultar IA'}
+          </button>
+        </div>
+      )}
+
+      {/* Chat IA Modal */}
+      {showAIChat && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.7)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: 'white',
+            borderRadius: '10px',
+            maxWidth: '800px',
+            width: '100%',
+            maxHeight: '80vh',
+            overflow: 'auto',
+            padding: '30px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0 }}>🤖 Asistente IA - Gemini Flash 2.0</h2>
+              <button
+                onClick={() => setShowAIChat(false)}
+                style={{
+                  background: '#f44336',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '5px',
+                  padding: '8px 16px',
+                  cursor: 'pointer'
+                }}
+              >
+                ✕ Cerrar
+              </button>
+            </div>
+
+            <p style={{ color: '#666', marginBottom: '20px' }}>
+              Servidores analizados: <strong>{allServersData.length}</strong>
+            </p>
+
+            <div style={{ marginBottom: '20px' }}>
+              <textarea
+                value={aiQuestion}
+                onChange={(e) => setAiQuestion(e.target.value)}
+                placeholder="Ejemplo: ¿En qué servidor me recomiendas instalar una aplicación de scraping que consuma mucha memoria?"
+                style={{
+                  width: '100%',
+                  minHeight: '100px',
+                  padding: '15px',
+                  borderRadius: '5px',
+                  border: '2px solid #ddd',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <button
+              onClick={askAI}
+              disabled={aiLoading || !aiQuestion.trim()}
+              style={{
+                padding: '12px 24px',
+                background: (aiLoading || !aiQuestion.trim()) ? '#ccc' : '#667eea',
+                color: 'white',
+                border: 'none',
+                borderRadius: '5px',
+                cursor: (aiLoading || !aiQuestion.trim()) ? 'not-allowed' : 'pointer',
+                fontWeight: 'bold',
+                marginBottom: '20px',
+                width: '100%'
+              }}
+            >
+              {aiLoading ? '🤔 Pensando...' : '💬 Preguntar a la IA'}
+            </button>
+
+            {aiAnswer && (
+              <div style={{
+                background: '#f5f5f5',
+                padding: '20px',
+                borderRadius: '8px',
+                borderLeft: '4px solid #667eea'
+              }}>
+                <h3 style={{ marginTop: 0, color: '#667eea' }}>💡 Respuesta:</h3>
+                <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6' }}>
+                  {aiAnswer}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div style={{ marginBottom: '40px', background: '#f5f5f5', padding: '20px', borderRadius: '8px' }}>
         <h2 style={{ fontSize: '18px', marginBottom: '15px' }}>➕ Agregar Servidor</h2>
@@ -427,7 +626,7 @@ export default function Home() {
 
       {results && (
         <div style={{ background: results.status === 'error' ? '#fff3cd' : '#e8f5e9', padding: '20px', borderRadius: '8px', border: results.status === 'error' ? '2px solid #ffc107' : '2px solid #4caf50' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
             <h2 style={{ fontSize: '20px', margin: 0 }}>
               {results.status === 'error' ? '❌ Error' : '✅ Resultados Completos'}
             </h2>
