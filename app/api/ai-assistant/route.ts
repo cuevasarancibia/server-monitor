@@ -16,113 +16,80 @@ export async function POST(request: Request) {
       );
     }
 
-    // Extraer información clave de cada servidor
+    // Extraer TODO el contenido como texto plano
     const simplifiedData = serversData.map((server: any) => {
       const info: any = {
         nombre: server.name,
         host: server.host,
-        aplicaciones: [],
-        puertos: [],
-        procesos: [],
-        rutas: []
+        hallazgos: []
       };
 
-      // Extraer de ps aux
-      const psAux = server.data?.data?.['ps aux --sort=-%mem | head -n 10'] || '';
-      const psLines = psAux.split('\n').filter((l: string) => l.trim());
+      // Convertir TODO el objeto de datos a string
+      const allDataString = JSON.stringify(server.data, null, 2).toLowerCase();
       
-      psLines.forEach((line: string) => {
-        // Buscar rutas /var/www/, /app/, /home/
-        const pathMatch = line.match(/\/(?:var\/www|app|home)\/([^\s]+)/g);
-        if (pathMatch) {
-          pathMatch.forEach((path: string) => {
-            if (!info.rutas.includes(path)) {
-              info.rutas.push(path);
-              
-              // Detectar aplicaciones por nombre de carpeta
-              if (path.toLowerCase().includes('crm')) {
-                info.aplicaciones.push(`CRM: ${path}`);
-              }
-              if (path.toLowerCase().includes('frontend')) {
-                info.aplicaciones.push(`Frontend: ${path}`);
-              }
-              if (path.toLowerCase().includes('backend') || path.toLowerCase().includes('api')) {
-                info.aplicaciones.push(`Backend/API: ${path}`);
-              }
+      // Buscar aplicaciones CRM
+      if (allDataString.includes('crm')) {
+        const crmMatches = allDataString.match(/\/[^\s"']+crm[^\s"']*/gi) || [];
+        crmMatches.forEach((match: string) => {
+          if (!info.hallazgos.some((h: string) => h.includes(match))) {
+            info.hallazgos.push(`📂 CRM encontrado: ${match}`);
+          }
+        });
+      }
+
+      // Buscar otras aplicaciones comunes
+      const patterns = [
+        { keyword: 'frontend', emoji: '🎨', name: 'Frontend' },
+        { keyword: 'backend', emoji: '⚙️', name: 'Backend' },
+        { keyword: 'api', emoji: '🔌', name: 'API' },
+        { keyword: 'admin', emoji: '👤', name: 'Panel Admin' },
+        { keyword: 'dashboard', emoji: '📊', name: 'Dashboard' },
+        { keyword: 'shop', emoji: '🛒', name: 'Tienda' },
+        { keyword: 'ecommerce', emoji: '🛍️', name: 'E-commerce' },
+        { keyword: 'wordpress', emoji: '📝', name: 'WordPress' },
+      ];
+
+      patterns.forEach(({ keyword, emoji, name }) => {
+        if (allDataString.includes(keyword)) {
+          const matches = allDataString.match(new RegExp(`/[^\\s"']+${keyword}[^\\s"']*`, 'gi')) || [];
+          matches.slice(0, 2).forEach((match: string) => {
+            if (!info.hallazgos.some((h: string) => h.includes(match))) {
+              info.hallazgos.push(`${emoji} ${name}: ${match}`);
             }
           });
         }
-
-        // Detectar aplicaciones por proceso
-        if (line.includes('node') || line.includes('npm')) {
-          info.procesos.push('Node.js/JavaScript');
-        }
-        if (line.includes('python') || line.includes('gunicorn') || line.includes('django')) {
-          info.procesos.push('Python/Django');
-        }
-        if (line.includes('nginx')) {
-          info.procesos.push('Nginx (Web Server)');
-        }
-        if (line.includes('mysql')) {
-          info.procesos.push('MySQL (Base de datos)');
-        }
-        if (line.includes('postgres')) {
-          info.procesos.push('PostgreSQL (Base de datos)');
-        }
-        if (line.includes('redis')) {
-          info.procesos.push('Redis (Caché)');
-        }
       });
 
-      // Extraer puertos de lsof
-      const lsof = server.data?.data?.['lsof -i -P -n | grep LISTEN | head -n 20'] || '';
-      const lsofLines = lsof.split('\n').filter((l: string) => l.trim());
-      
-      lsofLines.forEach((line: string) => {
-        const portMatch = line.match(/\*:(\d+)/);
-        if (portMatch) {
-          const port = portMatch[1];
-          let app = 'Desconocido';
-          
-          if (line.includes('nginx')) app = 'Nginx';
-          if (line.includes('node')) app = 'Node.js';
-          if (line.includes('python')) app = 'Python';
-          if (line.includes('mysql')) app = 'MySQL';
-          if (line.includes('postgres')) app = 'PostgreSQL';
-          if (line.includes('redis')) app = 'Redis';
-          
-          info.puertos.push(`Puerto ${port}: ${app}`);
-        }
-      });
+      // Extraer puertos activos
+      const portMatches = allDataString.match(/:\d{2,5}\s/g) || [];
+      const uniquePorts = [...new Set(portMatches)].slice(0, 8);
+      if (uniquePorts.length > 0) {
+        info.hallazgos.push(`🔌 Puertos: ${uniquePorts.map(p => p.trim()).join(', ')}`);
+      }
 
-      // Eliminar duplicados
-      info.procesos = [...new Set(info.procesos)];
-      info.aplicaciones = [...new Set(info.aplicaciones)];
+      // Si no encontró nada específico, poner un resumen genérico
+      if (info.hallazgos.length === 0) {
+        if (allDataString.includes('nginx')) info.hallazgos.push('🌐 Nginx detectado');
+        if (allDataString.includes('mysql')) info.hallazgos.push('🗄️ MySQL detectado');
+        if (allDataString.includes('postgres')) info.hallazgos.push('🗄️ PostgreSQL detectado');
+        if (allDataString.includes('redis')) info.hallazgos.push('⚡ Redis detectado');
+        if (allDataString.includes('docker')) info.hallazgos.push('🐳 Docker activo');
+      }
 
       return info;
     });
 
-    // Construir prompt mejorado
-    const prompt = `Eres un asistente técnico. Responde MÁXIMO 5 líneas, directo al grano.
+    // Construir prompt SUPER SIMPLE
+    const dataResumen = simplifiedData.map((s: any, idx: number) => 
+      `${idx + 1}. **${s.nombre}** (${s.host})\n${s.hallazgos.join('\n') || '   Sin aplicaciones detectadas'}`
+    ).join('\n\n');
 
-🔍 PREGUNTA: ${question}
+    const prompt = `Pregunta: ${question}
 
-📊 SERVIDORES DISPONIBLES:
-${simplifiedData.map((s: any, idx: number) => `
-${idx + 1}. ${s.nombre} (${s.host})
-   Aplicaciones: ${s.aplicaciones.length > 0 ? s.aplicaciones.join(', ') : 'Ninguna detectada'}
-   Rutas: ${s.rutas.slice(0, 5).join(', ') || 'Ninguna'}
-   Procesos: ${s.procesos.join(', ') || 'Ninguno'}
-   Puertos: ${s.puertos.slice(0, 8).join(', ') || 'Ninguno'}
-`).join('\n')}
+Datos encontrados:
+${dataResumen}
 
-💬 INSTRUCCIONES:
-- Si encuentras lo que busca: Di qué servidor, qué aplicación, ruta y puerto
-- Si NO encuentras: Di solo "❌ No encontrado"
-- Usa emojis: ✅ ❌ 📂 🌐 ⚙️ 🗄️
-- Máximo 5 líneas
-
-RESPUESTA:`;
+Responde en MÁXIMO 4 LÍNEAS. Si encontraste lo que busca el usuario, di en qué servidor está y qué rutas/puertos. Si no, di "❌ No encontrado".`;
 
     // Llamar a Gemini API
     const response = await fetch(
@@ -139,10 +106,10 @@ RESPUESTA:`;
             }]
           }],
           generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 200,
-            topP: 0.8,
-            topK: 20
+            temperature: 0.1,
+            maxOutputTokens: 150,
+            topP: 0.9,
+            topK: 10
           }
         })
       }
@@ -172,16 +139,14 @@ RESPUESTA:`;
 
 ---
 
-## 🎯 **QUÉ HACE ESTE CÓDIGO:**
+## 🎯 **QUÉ HACE DIFERENTE:**
 
-1. **Extrae info clave ANTES** de pasársela a Gemini:
-   - Busca rutas con `/var/www/`, `/app/`, `/home/`
-   - Detecta si hay "crm", "frontend", "backend" en las rutas
-   - Identifica aplicaciones por proceso (Node, Python, Nginx, etc)
-   - Extrae puertos activos
-
-2. **Le da datos PRE-PROCESADOS** en formato simple:
+1. **Convierte TODO a texto** y busca directamente las palabras clave
+2. **Busca "crm" en TODO el JSON** sin importar en qué campo esté
+3. **Extrae las rutas** que contengan "crm" con regex
+4. **Le da los datos YA PROCESADOS** a Gemini en formato super simple:
 ```
-   1. srv1025138 (72.60.141.227)
-      Aplicaciones: CRM: /var/www/crm-telecom/frontend, Backend/API: /var/www/crm-telecom/backend
-      Puertos: Puerto 7350: Node.js, Puerto 7351: Node.js, Puerto 5432: PostgreSQL
+1. **srv1025138** (72.60.141.227)
+📂 CRM encontrado: /var/www/crm-telecom/frontend
+📂 CRM encontrado: /var/www/crm-telecom/backend
+🔌 Puertos: :7350, :7351, :5432
