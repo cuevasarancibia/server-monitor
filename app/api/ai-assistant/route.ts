@@ -16,181 +16,95 @@ export async function POST(request: Request) {
       );
     }
 
-    // BÚSQUEDA EXHAUSTIVA EN CADA SERVIDOR
-    const hallazgosPorServidor = serversData.map((server: any) => {
-      const hallazgos: any = {
-        servidor: server.name,
-        host: server.host,
-        aplicaciones: [],
-        rutas: [],
-        puertos: [],
-        servicios: [],
-        bases_datos: []
+    // Función para generar el resumen completo (IGUAL que el .txt que descargas)
+    const generateFullSummary = (serverData: any) => {
+      let summary = `═══════════════════════════════════════════════════════════════\n`;
+      summary += `   SERVIDOR: ${serverData.name} (${serverData.host})\n`;
+      summary += `═══════════════════════════════════════════════════════════════\n\n`;
+
+      const data = serverData.data?.data;
+      if (!data) return summary + 'Sin datos\n';
+
+      // Categorizar resultados
+      const categories: any = {
+        'SISTEMA Y HARDWARE': [],
+        'MEMORIA Y DISCO': [],
+        'DIRECTORIOS Y APLICACIONES': [],
+        'PROCESOS': [],
+        'RED Y PUERTOS': [],
+        'SERVICIOS': [],
+        'DOCKER': [],
+        'USUARIOS Y SEGURIDAD': [],
+        'OTROS': []
       };
 
-      // Convertir TODO a string para buscar
-      const todoElContenido = JSON.stringify(server.data, null, 2);
-
-      // BUSCAR APLICACIONES POR RUTAS /var/www/, /app/, /home/
-      const rutasMatch = todoElContenido.match(/\/(?:var\/www|app|home|usr\/local|opt)\/[^\s"',\]]+/g) || [];
-      const rutasUnicas = [...new Set(rutasMatch)].filter(r => r.length > 10); // Filtrar rutas muy cortas
-      
-      rutasUnicas.forEach((ruta: string) => {
-        const rutaLower = ruta.toLowerCase();
-        
-        // Detectar CRM
-        if (rutaLower.includes('crm')) {
-          hallazgos.aplicaciones.push(`🎯 CRM: ${ruta}`);
-          hallazgos.rutas.push(ruta);
-        }
-        // Detectar Frontend
-        else if (rutaLower.includes('frontend') || rutaLower.includes('client')) {
-          hallazgos.aplicaciones.push(`🎨 Frontend: ${ruta}`);
-          hallazgos.rutas.push(ruta);
-        }
-        // Detectar Backend/API
-        else if (rutaLower.includes('backend') || rutaLower.includes('api') || rutaLower.includes('server')) {
-          hallazgos.aplicaciones.push(`⚙️ Backend: ${ruta}`);
-          hallazgos.rutas.push(ruta);
-        }
-        // Detectar WordPress
-        else if (rutaLower.includes('wordpress') || rutaLower.includes('wp-content')) {
-          hallazgos.aplicaciones.push(`📝 WordPress: ${ruta}`);
-          hallazgos.rutas.push(ruta);
-        }
-        // Detectar E-commerce
-        else if (rutaLower.includes('shop') || rutaLower.includes('ecommerce') || rutaLower.includes('tienda')) {
-          hallazgos.aplicaciones.push(`🛒 E-commerce: ${ruta}`);
-          hallazgos.rutas.push(ruta);
-        }
-        // Detectar Admin/Dashboard
-        else if (rutaLower.includes('admin') || rutaLower.includes('dashboard') || rutaLower.includes('panel')) {
-          hallazgos.aplicaciones.push(`👤 Panel Admin: ${ruta}`);
-          hallazgos.rutas.push(ruta);
-        }
-        // Otras rutas de proyectos
-        else if (rutaLower.match(/\/(var\/www|app|home)\/[a-z0-9_-]+\//)) {
-          hallazgos.rutas.push(ruta);
+      Object.entries(data).forEach(([command, output]: [string, any]) => {
+        if (command.includes('uname') || command.includes('os-release') || command.includes('lscpu')) {
+          categories['SISTEMA Y HARDWARE'].push({ command, output });
+        } else if (command.includes('free') || command.includes('df')) {
+          categories['MEMORIA Y DISCO'].push({ command, output });
+        } else if (command.includes('ls -la') || command.includes('find')) {
+          categories['DIRECTORIOS Y APLICACIONES'].push({ command, output });
+        } else if (command.includes('top') || command.includes('ps aux')) {
+          categories['PROCESOS'].push({ command, output });
+        } else if (command.includes('netstat') || command.includes('ss -') || command.includes('lsof') || command.includes('ip addr')) {
+          categories['RED Y PUERTOS'].push({ command, output });
+        } else if (command.includes('systemctl')) {
+          categories['SERVICIOS'].push({ command, output });
+        } else if (command.includes('docker')) {
+          categories['DOCKER'].push({ command, output });
+        } else if (command.includes('who') || command.includes('last')) {
+          categories['USUARIOS Y SEGURIDAD'].push({ command, output });
+        } else {
+          categories['OTROS'].push({ command, output });
         }
       });
 
-      // BUSCAR PUERTOS ACTIVOS
-      const lsofData = server.data?.data?.['lsof -i -P -n | grep LISTEN | head -n 20'] || '';
-      const netstatData = server.data?.data?.['netstat -tuln | head -n 30'] || '';
-      const ssData = server.data?.data?.['ss -tunap | head -n 30'] || '';
-      
-      const todosLosPuertos = `${lsofData}\n${netstatData}\n${ssData}`;
-      const puertosMatch = todosLosPuertos.match(/[:\s](\d{2,5})(?:\s|$|\()/g) || [];
-      const puertosUnicos = [...new Set(puertosMatch.map(p => p.match(/\d{2,5}/)?.[0]).filter(Boolean))];
-      
-      puertosUnicos.forEach((puerto: string) => {
-        const puertoNum = parseInt(puerto);
-        let tipo = 'Aplicación';
-        
-        if (puertoNum === 80 || puertoNum === 8080) tipo = '🌐 HTTP';
-        else if (puertoNum === 443 || puertoNum === 8443) tipo = '🔒 HTTPS';
-        else if (puertoNum === 22) tipo = '🔐 SSH';
-        else if (puertoNum === 3306) tipo = '🗄️ MySQL';
-        else if (puertoNum === 5432) tipo = '🐘 PostgreSQL';
-        else if (puertoNum === 6379) tipo = '⚡ Redis';
-        else if (puertoNum === 27017) tipo = '🍃 MongoDB';
-        else if (puertoNum >= 3000 && puertoNum <= 9999) tipo = '🔌 App Web';
-        
-        hallazgos.puertos.push(`Puerto ${puerto}: ${tipo}`);
+      Object.entries(categories).forEach(([category, items]: [string, any]) => {
+        if (items.length > 0) {
+          summary += `\n┌─────────────────────────────────────────────────────────────┐\n`;
+          summary += `│ ${category.padEnd(58)} │\n`;
+          summary += `└─────────────────────────────────────────────────────────────┘\n\n`;
+
+          items.forEach((item: any) => {
+            summary += `▶ ${item.command}\n`;
+            summary += `${'─'.repeat(60)}\n`;
+            summary += `${item.output}\n\n`;
+          });
+        }
       });
 
-      // BUSCAR SERVICIOS ACTIVOS
-      const serviciosData = server.data?.data?.['systemctl list-units --type=service --state=running | head -n 20'] || '';
-      const psData = server.data?.data?.['ps aux --sort=-%mem | head -n 10'] || '';
-      
-      if (serviciosData.includes('nginx') || psData.toLowerCase().includes('nginx')) {
-        hallazgos.servicios.push('🌐 Nginx');
-      }
-      if (serviciosData.includes('apache') || psData.toLowerCase().includes('apache')) {
-        hallazgos.servicios.push('🌐 Apache');
-      }
-      if (serviciosData.includes('mysql') || psData.toLowerCase().includes('mysql')) {
-        hallazgos.bases_datos.push('🗄️ MySQL');
-      }
-      if (serviciosData.includes('postgres') || psData.toLowerCase().includes('postgres')) {
-        hallazgos.bases_datos.push('🐘 PostgreSQL');
-      }
-      if (serviciosData.includes('redis') || psData.toLowerCase().includes('redis')) {
-        hallazgos.bases_datos.push('⚡ Redis');
-      }
-      if (serviciosData.includes('mongodb') || psData.toLowerCase().includes('mongo')) {
-        hallazgos.bases_datos.push('🍃 MongoDB');
-      }
-      if (serviciosData.includes('docker') || psData.toLowerCase().includes('docker')) {
-        hallazgos.servicios.push('🐳 Docker');
-      }
+      return summary;
+    };
 
-      // BUSCAR PROCESOS NODE/PYTHON
-      if (psData.toLowerCase().includes('node') || psData.toLowerCase().includes('npm')) {
-        hallazgos.servicios.push('⚛️ Node.js');
-      }
-      if (psData.toLowerCase().includes('python') || psData.toLowerCase().includes('gunicorn') || psData.toLowerCase().includes('django')) {
-        hallazgos.servicios.push('🐍 Python');
-      }
-
-      return hallazgos;
-    });
-
-    // CREAR RESUMEN SUPER CLARO PARA GEMINI
-    let resumenCompleto = '📊 ANÁLISIS COMPLETO DE SERVIDORES:\n\n';
+    // Generar resumen completo de TODOS los servidores
+    let resumenCompleto = '📊 ANÁLISIS DETALLADO DE TODOS LOS SERVIDORES:\n\n';
     
-    hallazgosPorServidor.forEach((h: any, idx: number) => {
-      resumenCompleto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      resumenCompleto += `${idx + 1}. SERVIDOR: ${h.servidor} (${h.host})\n`;
-      resumenCompleto += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-      
-      if (h.aplicaciones.length > 0) {
-        resumenCompleto += `📱 APLICACIONES ENCONTRADAS:\n`;
-        h.aplicaciones.forEach((app: string) => resumenCompleto += `   ${app}\n`);
-        resumenCompleto += `\n`;
-      }
-      
-      if (h.rutas.length > 0 && h.aplicaciones.length === 0) {
-        resumenCompleto += `📂 RUTAS DE PROYECTOS:\n`;
-        h.rutas.slice(0, 10).forEach((ruta: string) => resumenCompleto += `   ${ruta}\n`);
-        resumenCompleto += `\n`;
-      }
-      
-      if (h.servicios.length > 0) {
-        resumenCompleto += `⚙️ SERVICIOS: ${h.servicios.join(', ')}\n\n`;
-      }
-      
-      if (h.bases_datos.length > 0) {
-        resumenCompleto += `🗄️ BASES DE DATOS: ${h.bases_datos.join(', ')}\n\n`;
-      }
-      
-      if (h.puertos.length > 0) {
-        resumenCompleto += `🔌 PUERTOS ACTIVOS:\n`;
-        h.puertos.slice(0, 10).forEach((puerto: string) => resumenCompleto += `   ${puerto}\n`);
-        resumenCompleto += `\n`;
-      }
-      
-      if (h.aplicaciones.length === 0 && h.rutas.length === 0) {
-        resumenCompleto += `ℹ️ Sin aplicaciones específicas detectadas\n\n`;
-      }
-      
-      resumenCompleto += `\n`;
+    serversData.forEach((server: any) => {
+      resumenCompleto += generateFullSummary(server);
+      resumenCompleto += '\n\n';
     });
 
-    // PROMPT SUPER SIMPLE PARA GEMINI
-    const prompt = `${resumenCompleto}
+    // Prompt optimizado
+    const prompt = `Tienes acceso al análisis COMPLETO de ${serversData.length} servidores Linux.
 
-❓ PREGUNTA DEL USUARIO:
+Tu trabajo es responder la pregunta del usuario de forma DIRECTA y PRECISA.
+
+REGLAS:
+1. Lee CUIDADOSAMENTE todos los datos de los servidores
+2. Busca en TODAS las secciones: directorios, procesos, puertos, servicios
+3. Si encuentras lo que busca: Di el servidor, la ruta EXACTA, y puerto si aplica
+4. Si NO encuentras: Di "❌ No encontrado"
+5. Responde en máximo 6 líneas
+6. Usa emojis: ✅ ❌ 📂 🌐 ⚙️ 🗄️
+
+DATOS COMPLETOS:
+${resumenCompleto}
+
+PREGUNTA:
 ${question}
 
-💬 INSTRUCCIONES:
-- Lee el análisis de arriba
-- Si encontraste lo que busca: Di en qué servidor está, la ruta exacta y puerto
-- Si NO lo encontraste: Di "❌ No encontrado en ningún servidor"
-- Responde en máximo 5 líneas
-- Usa emojis
-
-RESPUESTA:`;
+RESPUESTA DIRECTA:`;
 
     // Llamar a Gemini API
     const response = await fetch(
@@ -208,7 +122,7 @@ RESPUESTA:`;
           }],
           generationConfig: {
             temperature: 0.1,
-            maxOutputTokens: 200,
+            maxOutputTokens: 300,
             topP: 0.9,
             topK: 10
           }
@@ -236,33 +150,3 @@ RESPUESTA:`;
     );
   }
 }
-```
-
----
-
-## 🎯 **ESTE CÓDIGO:**
-
-1. **Busca EXHAUSTIVAMENTE** en cada servidor:
-   - Rutas con `/var/www/`, `/app/`, `/home/`
-   - Detecta "crm", "frontend", "backend", etc.
-   - Extrae TODOS los puertos
-   - Identifica servicios y bases de datos
-
-2. **Le da a Gemini un resumen SUPER CLARO** tipo:
-```
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. SERVIDOR: srv1025138 (72.60.141.227)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-📱 APLICACIONES ENCONTRADAS:
-   🎯 CRM: /var/www/crm-telecom/frontend
-   🎯 CRM: /var/www/crm-telecom/backend
-
-⚙️ SERVICIOS: 🌐 Nginx, ⚛️ Node.js, 🐳 Docker
-
-🗄️ BASES DE DATOS: 🐘 PostgreSQL, ⚡ Redis
-
-🔌 PUERTOS ACTIVOS:
-   Puerto 7350: 🔌 App Web
-   Puerto 7351: 🔌 App Web
-   Puerto 5432: 🐘 PostgreSQL
