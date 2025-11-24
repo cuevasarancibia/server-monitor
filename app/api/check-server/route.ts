@@ -55,6 +55,12 @@ function checkServer(
       'ip addr show',                        // Interfaces de red
       'docker ps 2>/dev/null || echo "Docker no instalado"',  // Contenedores Docker
       'docker stats --no-stream 2>/dev/null || echo "Docker no instalado"', // Stats Docker
+      'ls -la /var/www/ 2>/dev/null || echo "No accesible"',
+      'ls -la /home/ 2>/dev/null || echo "No accesible"',
+      'ls -la /app/ 2>/dev/null || echo "No accesible"',
+      'ls -la /opt/ 2>/dev/null || echo "No accesible"',
+      'find /var/www/ -maxdepth 2 -type d 2>/dev/null || echo "No accesible"',
+      'find /home/ -maxdepth 2 -type d 2>/dev/null || echo "No accesible"',
     ];
 
     let results: any = {
