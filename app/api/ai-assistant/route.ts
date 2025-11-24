@@ -16,16 +16,24 @@ export async function POST(request: Request) {
       );
     }
 
-    // Construir el prompt para Gemini
-    const prompt = `Eres un experto en administración de servidores Linux. Analiza la siguiente información de servidores y responde la pregunta del usuario de forma clara y profesional.
+    // Construir el prompt optimizado para respuestas cortas
+    const prompt = `Eres un asistente técnico experto. Tu trabajo es responder DIRECTO y CONCISO (máximo 150 palabras).
 
-INFORMACIÓN DE LOS SERVIDORES:
+📋 REGLAS ESTRICTAS:
+1. Responde en máximo 4-5 líneas
+2. Si encuentras lo que busca: di EXACTAMENTE dónde está (servidor, ruta, puerto)
+3. Si NO encuentras: di solo "❌ No encontrado en ningún servidor"
+4. NO des explicaciones técnicas largas
+5. USA EMOJIS para mejor lectura (✅ ❌ 📂 🌐 ⚙️ 🗄️ 🐍 🟢)
+6. Enfócate en: aplicaciones detectadas (nginx, node, python, redis, mysql, postgres), puertos ocupados, rutas /var/www/, procesos activos
+
+📊 DATOS DE LOS SERVIDORES:
 ${JSON.stringify(serversData, null, 2)}
 
-PREGUNTA DEL USUARIO:
+❓ PREGUNTA:
 ${question}
 
-Por favor, analiza los recursos disponibles (CPU, RAM, disco), aplicaciones instaladas, y carga actual de cada servidor. Da una recomendación específica basada en datos reales.`;
+💬 RESPUESTA (CORTA Y DIRECTA):`;
 
     // Llamar a Gemini API
     const response = await fetch(
@@ -40,7 +48,13 @@ Por favor, analiza los recursos disponibles (CPU, RAM, disco), aplicaciones inst
             parts: [{
               text: prompt
             }]
-          }]
+          }],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 300,
+            topP: 0.8,
+            topK: 40
+          }
         })
       }
     );
@@ -57,7 +71,6 @@ Por favor, analiza los recursos disponibles (CPU, RAM, disco), aplicaciones inst
         { status: 500 }
       );
     }
-
   } catch (error: any) {
     console.error('Error:', error);
     return NextResponse.json(
